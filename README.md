@@ -1,8 +1,9 @@
 # Caliper
 
 A local inference engine for one dense model on one consumer card, with an
-**exact mode**: every token bit-identical to what the original bfloat16 weights
-would have produced.
+**exact mode**: every token is the one the original bfloat16 weights pick at
+that position, computed at full precision. A run reproduces exactly at a given
+draft length -- see Exact mode for why that qualifier is there.
 
 An engine by Aetherion Substrata Ltd.
 
@@ -11,7 +12,7 @@ An engine by Aetherion Substrata Ltd.
 | mode | what you get | tok/s |
 | --- | --- | --- |
 | `engine.py` | the model held entirely on the card in a 6-bit form | 12.4 |
-| `exact.py` | every token bit-identical to the bfloat16 reference | 1.9 |
+| `exact.py` | every token the bfloat16 reference's own pick, at a fixed draft length | 1.9 |
 
 Generation rate, 14B dense, 16 GB card, greedy, single stream, desktop open.
 Loading takes about 15 seconds; the prompt pass is counted separately.
@@ -43,8 +44,14 @@ full-precision model would have chosen.
 Measured:
 
 - the proposer agrees with the full-precision model on **95.8%** of tokens
-- the check gives **identical** picks whether it checks 1 token or 40 at once,
-  so a batched check cannot flip a near-tie a one-at-a-time run would not
+- the check's pick **does** depend on how many positions it covers at once.
+  Over one 65-position sequence, checking 8 positions at a time and checking 40
+  at a time disagreed at **one** position. A near-tie resolves on the last bits,
+  and the card reduces a wider sum in a different order. This is ordinary batch
+  variance and not quantisation -- no 6-bit weight ever decides a token, every
+  emitted token comes out of the bfloat16 weights -- but draft length is a
+  setting you control, so it is a setting that can move the output. Hold it
+  fixed to reproduce a run.
 - about 4.5 tokens of a 10-token run survive in live generation
 
 Speed is set by the bus: a check moves 29.5 GB of weights, about 1.9 s at the
@@ -53,9 +60,10 @@ do not help; 10 is already at the top of a flat curve.
 
 ## What it is for
 
-Determinism against a reference. Evaluation runs that have to repeat exactly,
-regression tests across quantisation changes, anything where "close enough" is
-not a result.
+Determinism against a reference at a fixed draft length. Evaluation runs that
+have to repeat exactly, regression tests across quantisation changes, anything
+where "close enough" is not a result. Pin the draft length in the run you want
+to be able to repeat.
 
 ## Running it
 
