@@ -43,13 +43,20 @@ full-precision model would have chosen.
 Measured:
 
 - the proposer agrees with the full-precision model on **95.8%** of tokens
-- the check gives **identical** picks whether it checks 1 token or 40 at once,
-  so a batched check cannot flip a near-tie a one-at-a-time run would not
 - about 4.5 tokens of a 10-token run survive in live generation
+- a run repeats token for token at a **fixed guess length**. Change it and a
+  near-tie can land the other way: over 65 positions, one picked differently
+  when the check covered 40 at a time instead of 8. The weights are the same
+  either way - a wide reduction and a narrow one disagree on the last bits, as
+  they do in any batched GPU arithmetic. Hold the guess length and the run is
+  reproducible; quote it with any figure you publish
 
 Speed is set by the bus: a check moves 29.5 GB of weights, about 1.9 s at the
-measured 15.2 GB/s, which is nearly the whole cost of a token. Longer guesses
-do not help; 10 is already at the top of a flat curve.
+measured 15.2 GB/s, which is nearly the whole cost of a token. The cost is paid
+per check, not per token - the same 65 positions take 0.51 s a token covered 40
+at a time and 1.20 s covered 8. So the figure that sets the speed is how many
+tokens survive each check, and a longer guess only helps as far as the proposer
+keeps agreeing.
 
 ## What it is for
 
