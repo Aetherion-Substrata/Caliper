@@ -1,0 +1,18 @@
+Caliper
+Copyright 2026 Aetherion Substrata Ltd
+
+This product includes no model weights.
+
+To run it you supply your own copy of a base model. The engine was built and
+measured against:
+
+    Qwen2.5-14B-Instruct
+    Copyright 2024 Alibaba Cloud
+    Licensed under the Apache License, Version 2.0
+
+Changes made by this product: none to the weights on disk. At load time the
+engine derives a 6-bit in-memory form of the weights (a 6-bit signed step count
+per weight with one shared bfloat16 scale per 32 weights) and, in exact mode,
+reads the original weights unchanged to verify its own output.
+
+Alibaba Cloud does not endorse this product.
