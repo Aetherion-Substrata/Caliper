@@ -10,13 +10,13 @@ def load():
     t0 = time.time(); cfg = json.load(open(os.path.join(SRC, "config.json")))
     nl, nh, nkv = cfg["num_hidden_layers"], cfg["num_attention_heads"], cfg["num_key_value_heads"]; hd = cfg.get("head_dim") or cfg["hidden_size"] // nh
     eps, theta = cfg["rms_norm_eps"], cfg.get("rope_theta", 1e6)
-    _ix = os.path.join(SRC, "model.safetensors.index.json")
+    fh = {}; _ix = os.path.join(SRC, "model.safetensors.index.json")
     if os.path.exists(_ix):
         idx = json.load(open(_ix))["weight_map"]                       # sharded
     else:                                                              # one file
         from safetensors import safe_open as _so
         _one = "model.safetensors"
-        idx = {k: _one for k in _so(os.path.join(SRC, _one), framework="pt").keys()}; fh = {}
+        idx = {k: _one for k in _so(os.path.join(SRC, _one), framework="pt").keys()}
     def Topt(n):
         try: return T(n)
         except Exception: return None
