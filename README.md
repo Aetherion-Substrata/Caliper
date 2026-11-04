@@ -52,11 +52,10 @@ Measured:
   reproducible; quote it with any figure you publish
 
 Speed is set by the bus: a check moves 29.5 GB of weights, about 1.9 s at the
-measured 15.2 GB/s, which is nearly the whole cost of a token. The cost is paid
-per check, not per token - the same 65 positions take 0.51 s a token covered 40
-at a time and 1.20 s covered 8. So the figure that sets the speed is how many
-tokens survive each check, and a longer guess only helps as far as the proposer
-keeps agreeing.
+measured 15.2 GB/s, which is nearly the whole cost of a token. That cost is paid
+per check and not per token, so the figure that sets the speed is how many tokens
+survive each check, and a longer guess helps only as far as the proposer keeps
+agreeing.
 
 ## What it is for
 
