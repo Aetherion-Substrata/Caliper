@@ -1,8 +1,27 @@
 # B6RUN: the 14B held fully on the card in B6 (6-bit + bf16 scale per 32), Triton reads it straight into the matvec. Greedy chat, tok/s.
 import os, sys, json, time, math, torch, triton, triton.language as tl
-from safetensors import safe_open
 SRC = os.environ.get("CALIPER_MODEL") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "model")
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runs")
+_ST_DT = {"BF16": torch.bfloat16, "F16": torch.float16, "F32": torch.float32, "F64": torch.float64, "I64": torch.int64,
+          "I32": torch.int32, "I16": torch.int16, "I8": torch.int8, "U8": torch.uint8, "BOOL": torch.bool}
+_ST_HDR = {}
+def st_header(path):  # safetensors: u64 header length, JSON header, then the raw tensor bytes
+    if path not in _ST_HDR:
+        with open(path, "rb") as fp:
+            n = int.from_bytes(fp.read(8), "little"); _ST_HDR[path] = (8 + n, json.loads(fp.read(n)))
+    return _ST_HDR[path]
+def st_tensor(path, name):
+    """One tensor, read with a plain file read into memory this process owns. No memory map: mapped file pages
+    would sit in the working set beside the copy the engine makes of them, and on a 14B that is the checkpoint twice."""
+    base, h = st_header(path); m = h[name]; a, b = m["data_offsets"]
+    t = torch.empty(b - a, dtype=torch.uint8); mv = memoryview(t.numpy()); got = 0
+    with open(path, "rb") as fp:
+        fp.seek(base + a)
+        while got < b - a:
+            k = fp.readinto(mv[got:])
+            if not k: raise IOError("short read: %s in %s" % (name, path))
+            got += k
+    return t.view(_ST_DT[m["dtype"]]).reshape(m["shape"])
 @triton.jit
 def gemv6(L, H, S, X, Y, R, C, sl, sh, ss, BR: tl.constexpr, BK: tl.constexpr):
     r = tl.program_id(0) * BR + tl.arange(0, BR); rm = r < R
@@ -45,10 +64,8 @@ def main():
     if os.path.exists(_ix):
         idx = json.load(open(_ix))["weight_map"]                       # sharded
     else:                                                              # one file
-        from safetensors import safe_open as _so
         _one = "model.safetensors"
-        idx = {k: _one for k in _so(os.path.join(SRC, _one), framework="pt").keys()}
-    fh = {}
+        idx = {k: _one for k in st_header(os.path.join(SRC, _one))[1] if k != "__metadata__"}
     def Tc(n):                       # cast whatever the model stores to the working dtype
         t = T(n); return t.to(WDT) if t.dtype != WDT else t
 
@@ -57,9 +74,7 @@ def main():
         except Exception: return None
 
     def T(n):
-        f = idx[n]
-        if f not in fh: fh[f] = safe_open(os.path.join(SRC, f), framework="pt")
-        return fh[f].get_tensor(n)
+        return st_tensor(os.path.join(SRC, idx[n]), n)
     WDT = T("model.embed_tokens.weight").dtype                        # fp32, fp16 or bf16, as stored
     if WDT not in (torch.float32, torch.float16, torch.bfloat16):
         raise SystemExit("Caliper reads fp32, fp16 and bf16 safetensors; this model is " + str(WDT))

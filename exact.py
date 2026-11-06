@@ -4,27 +4,23 @@
 import os, sys, json, time, math, torch
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import engine as b6m
-from safetensors import safe_open
 SRC = b6m.SRC; G = int(os.environ.get("CALIPER_GUESS", 10)); MAXT = 2048
 def load():
     t0 = time.time(); cfg = json.load(open(os.path.join(SRC, "config.json")))
     nl, nh, nkv = cfg["num_hidden_layers"], cfg["num_attention_heads"], cfg["num_key_value_heads"]; hd = cfg.get("head_dim") or cfg["hidden_size"] // nh
     eps, theta = cfg["rms_norm_eps"], cfg.get("rope_theta", 1e6)
-    fh = {}; _ix = os.path.join(SRC, "model.safetensors.index.json")
+    _ix = os.path.join(SRC, "model.safetensors.index.json")
     if os.path.exists(_ix):
         idx = json.load(open(_ix))["weight_map"]                       # sharded
     else:                                                              # one file
-        from safetensors import safe_open as _so
         _one = "model.safetensors"
-        idx = {k: _one for k in _so(os.path.join(SRC, _one), framework="pt").keys()}
+        idx = {k: _one for k in b6m.st_header(os.path.join(SRC, _one))[1] if k != "__metadata__"}
     def Topt(n):
         try: return T(n)
         except Exception: return None
 
     def T(n):
-        f = idx[n]
-        if f not in fh: fh[f] = safe_open(os.path.join(SRC, f), framework="pt")
-        return fh[f].get_tensor(n)
+        return b6m.st_tensor(os.path.join(SRC, idx[n]), n)
     WDT = T("model.embed_tokens.weight").dtype
     if WDT not in (torch.float32, torch.float16, torch.bfloat16):
         raise SystemExit("Caliper reads fp32, fp16 and bf16 safetensors; this model is " + str(WDT))
